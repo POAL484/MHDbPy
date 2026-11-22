@@ -26,8 +26,11 @@ class MHDbList:
     def popFirst(self) -> typing.Any:
         return self.mhdb.popFirst(self.key).value
 
-    def append(self, val: typing.Any):
-        self.mhdb.append(self.key, val)
+    def append(self, val: typing.Any) -> int:
+        return self.mhdb.append(self.key, val).size
+
+    def addFirst(self, val: typing.Any) -> int:
+        return self.mhdb.addFirst(self.key, val).size
 
     def insert(self, index: int, val: typing.Any):
         if index == 0: self.mhdb.addFirst(val)
@@ -39,14 +42,14 @@ class MHDbList:
 
     def __getitem__(self, s: int | slice):
         if isinstance(s, slice):
-            return self.mhdb.getItem(self.key, list(range(*s.indices(self.__len__())))).items
-        maybeItem = self.mhdb.getItem(self.key, s).items
+            return self.mhdb.getItem(self.key, list(range(*s.indices(self.__len__())))).value
+        maybeItem = self.mhdb.getItem(self.key, s).value
         if maybeItem is None: return None
         if len(maybeItem) == 1: return maybeItem[0]
         return maybeItem
 
     def getItems(self, indexes: typing.List[int]) -> typing.List[typing.Any]:
-        return self.mhdb.getItem(self.key, indexes).items
+        return self.mhdb.getItem(self.key, indexes).value
 
     def __setitem__(self, key: int, value):
         l = self()
@@ -78,7 +81,7 @@ class MHDbSet:
     def __init__(self, mhdb, key: str, create: set | None = None):
         self.mhdb = mhdb
         self.key = key
-        if create: mhdb.set(key, {"$set": list(create)})
+        if create: mhdb.set(key, create)
 
     def get(self) -> set:
         return self.mhdb.get(self.key).value
@@ -106,6 +109,9 @@ class MHDbSet:
         if size is None: return 0
         return size
 
+    def size(self) -> int:
+        return self.__len__()
+
 class MHDbMap:
 
     key: str
@@ -127,7 +133,7 @@ class MHDbMap:
         return self.__contains__(item)
 
     def __getitem__(self, key):
-        items = self.mhdb.getItem(self.key, key).items
+        items = self.mhdb.getItem(self.key, key).value
         if items is None: return None
         if len(items) == 1: return items[key]
         return items
@@ -138,7 +144,7 @@ class MHDbMap:
     def __setitem__(self, key: str, value: typing.Any) -> int:
         return self.mhdb.mapSet(self.key, {key: value}).size
 
-    def __delitem__(self, key) -> typing.Any | None:
+    def __delitem__(self, key):
         self.mhdb.mapDelete(self.key, key)
 
     def update(self, dictToUpdate: dict) -> int:
@@ -156,6 +162,9 @@ class MHDbMap:
         if size is None: return 0
         return size
 
+    def size(self) -> int:
+        return self.__len__()
+
 class MHDb:
     host: str
 
@@ -166,8 +175,8 @@ class MHDb:
         return req.post(self.host, headers=HEAD, json={"op": op, **kwargs}).json()
 
     def set(self, key: str, value: typing.Any) -> MHDbSetResponse:
-        if value is set:
-            value = {"$set": value}
+        if isinstance(value, set):
+            value = {"$set": list(value)}
         return MHDbSetResponse(
             value,
             self.makeOperation("SET", key = key, value = value)
@@ -232,7 +241,7 @@ class MHDb:
         return MHDbList(self, key) if isinstance(obj, list) else None
 
     def createSet(self, key: str, *args) -> MHDbSet:
-        return MHDbSet(self, key, args)
+        return MHDbSet(self, key, set(args))
 
     def getSet(self, key: str) -> MHDbSet | None:
         obj = self.get(key).value
